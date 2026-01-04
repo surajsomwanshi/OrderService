@@ -1,7 +1,9 @@
 package com.codewithsuraj.OrderService.service;
 
 import com.codewithsuraj.OrderService.entity.Order;
+import com.codewithsuraj.OrderService.external.client.PaymentService;
 import com.codewithsuraj.OrderService.external.client.ProductService;
+import com.codewithsuraj.OrderService.external.request.PaymentRequest;
 import com.codewithsuraj.OrderService.model.OrderRequest;
 import com.codewithsuraj.OrderService.repository.OrderRepository;
 import lombok.extern.log4j.Log4j2;
@@ -19,6 +21,9 @@ public class OrderServiceImpl implements OrderService{
 
     @Autowired
     private ProductService productService;
+
+    @Autowired
+    private PaymentService paymentService;
 
     /**
      * @param orderRequest
@@ -43,6 +48,26 @@ public class OrderServiceImpl implements OrderService{
                 .build();
 
         order = orderRepository.save(order);
+
+        log.info("Calling payment service to complete the payment");
+        PaymentRequest paymentRequest = PaymentRequest.builder()
+                .orderId(order.getId())
+                .paymentMode(orderRequest.getPaymentMode())
+                .amount(orderRequest.getTotalAmount())
+                .build();
+
+        String orderStatus = null;
+        try{
+            paymentService.doPayment(paymentRequest);
+            log.info("Payment done successfully. changing the order status");
+            orderStatus = "PLACED";
+        } catch (Exception e) {
+            log.error("Error occurred in payment. Changing the order status");
+            orderStatus = "PAYMENT_FAILED";
+        }
+
+        order.setOrderStatus(orderStatus);
+        orderRepository.save(order);
 
         log.info("Order places successfully with order id: {}", order.getId());
 
